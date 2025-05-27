@@ -13,7 +13,7 @@ use editable_text::EditableText;
 use table_display::TableDisplay;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Margin},
+    layout::{Constraint, Direction, Layout},
     widgets::Paragraph,
 };
 use rusqlite::{params_from_iter, types::Value as RsqValue};
@@ -187,7 +187,6 @@ impl DatabaseComp {
                 // TODO: maybe store the response to show as a thingy
                 self.connection.delete(&query, params_from_iter(params))?;
                 // refresh the database and update the command list
-                self.command_list.highlight_current_selection();
                 self.refresh()?;
                 return Ok(true);
             }
@@ -226,7 +225,7 @@ impl DatabaseComp {
             "Trying to submit modification from an editor which doesn't exist"
         );
         let table = self.table.as_ref().unwrap();
-        let mut to_update: Option<(usize, usize, Value)> = None;
+        let to_update: Option<(usize, usize, Value)>;
         match table.selections() {
             [MultiTableSelection::Cell((y, x))] => {
                 let (y, x) = (*y, *x);
@@ -360,6 +359,8 @@ impl DatabaseComp {
                     self.set_selection_type(command.uses_rows());
                 }
             }
+            // change the focused element to be the table now
+            self.focus = FocusArea::Table;
         }
     }
 
@@ -376,7 +377,6 @@ impl DatabaseComp {
                 Ok(())
             }
             EditCommand::Modify => {
-                // TODO: more with this?
                 self.focus = FocusArea::Editor;
                 if let Some(editor) = &mut self.cell_display {
                     editor.toggle_focus();
@@ -458,10 +458,6 @@ impl Component for DatabaseComp {
                                     Ok(vec![Action::Noop])
                                 }
                                 KeyCode::Enter => {
-                                    // TODO: as the editor is only active during modify,
-                                    //       this should run the SQL to validate and modify the cell,
-                                    //       then change focus back to the table, removing the
-                                    //       selection as well
                                     if self.submit_modify()? {
                                         if let Some(editor) = &mut self.cell_display {
                                             editor.toggle_focus();
@@ -497,8 +493,6 @@ impl Component for DatabaseComp {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Vec<Action>, Box<dyn Error>> {
-        // TODO: also make the column_info be used here and passed somehow to the add component, likely requiring lifetimes but w/e
-
         if let Some(table) = &mut self.table {
             let mut actions = table.handle_key_event(key)?;
             // handle any changes of highlight or selection in the table within this component
@@ -555,7 +549,7 @@ impl Component for DatabaseComp {
             } else {
                 if let Some(cell_display) = &mut self.cell_display {
                     // split the main_rect to show the cell display
-                    let [table_rect, cell_display_rect, ..] = *Layout::default()
+                    let [table_rect, mut cell_display_rect, ..] = *Layout::default()
                         .margin(1) // 1 margin to account for border
                         .direction(Direction::Horizontal)
                         .constraints([
@@ -566,17 +560,30 @@ impl Component for DatabaseComp {
                     else {
                         panic!("Not enough size to create the necessary rects");
                     };
-                    // TODO: Instead of offsetting this with a 1px margin,
-                    //       add a title denoting that it is the reader
-                    //       and border it better (make it look good)
-                    cell_display.render(
-                        f,
-                        cell_display_rect.inner(Margin::new(1, 1)),
-                        Block::new(),
-                    );
-                    table.render(f, table_rect, Block::new());
+
                     // render the main border block separately
-                    f.render_widget(main_block, main_rect);
+                    f.render_widget(main_block.bg(DEFAULT_APP_COLORS.main_bg), main_rect);
+                    // allot space for the title of the cell display
+                    let mut cell_display_title_rect = cell_display_rect.clone();
+                    cell_display_title_rect.height = 1;
+                    cell_display_rect.height = cell_display_rect.height.saturating_sub(1);
+                    cell_display_rect.y += 1;
+                    cell_display_rect.width = cell_display_rect.width.saturating_sub(1);
+                    cell_display_rect.x += 1;
+                    let display_title = if self.focus == FocusArea::Editor {
+                        "Editor"
+                    } else {
+                        "Reader"
+                    };
+                    f.render_widget(
+                        Paragraph::new(display_title)
+                            .bg(DEFAULT_APP_COLORS.header_bg)
+                            .fg(DEFAULT_APP_COLORS.header_fg)
+                            .centered(),
+                        cell_display_title_rect,
+                    );
+                    cell_display.render(f, cell_display_rect, Block::new());
+                    table.render(f, table_rect, Block::new());
                 } else {
                     table.render(f, main_rect, main_block);
                 }

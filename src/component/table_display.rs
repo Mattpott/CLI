@@ -1,7 +1,6 @@
 use std::{borrow::Cow, error::Error};
 
 use ratatui::{
-    layout::Margin,
     text::Text,
     widgets::{
         Cell, Row, Scrollbar, ScrollbarState, Table as TuiTable, TableState as TuiTableState,
@@ -265,9 +264,22 @@ impl Component for TableDisplay {
                 };
                 // update highlighting depending on selection style and selected items
                 Row::new(row.iter().enumerate().map(|(x, cell)| {
-                    let mut cur_cell_style = if row_selected_ind.is_none() && x % 2 == 0 {
-                        // row is not selected, so alternate colors per column
-                        Style::new().bg(DEFAULT_APP_COLORS.alt_bg)
+                    let mut cur_cell_style = if row_selected_ind.is_none() {
+                        // current row is not selected, so column color is more complex
+                        if self.uses_rows
+                            && self.table_state.selected_cell().is_some_and(
+                                |(highlit_row, highlit_col)| y < highlit_row && highlit_col == x,
+                            )
+                        {
+                            // make highlit column have a special bg color
+                            Style::new().bg(DEFAULT_APP_COLORS.highlit_bg)
+                        } else if x % 2 == 0 {
+                            // alternate color as column is not highlit
+                            Style::new().bg(DEFAULT_APP_COLORS.alt_bg)
+                        } else {
+                            // just use no style as the row style acts as a default
+                            Style::new()
+                        }
                     } else {
                         // just use no style as the row style acts as a default
                         Style::new()
@@ -317,16 +329,16 @@ impl Component for TableDisplay {
         f.render_stateful_widget(table, rect, &mut self.table_state);
 
         // render the scrollbar for the table
+        let mut scrollbar_rect = rect.clone();
+        scrollbar_rect.y += 1;
+        scrollbar_rect.height = scrollbar_rect.height.saturating_sub(1);
         f.render_stateful_widget(
             Scrollbar::default()
                 .orientation(ratatui::widgets::ScrollbarOrientation::VerticalRight)
                 .begin_symbol(None)
                 .end_symbol(None)
                 .style(DEFAULT_APP_COLORS.main_fg),
-            rect.inner(Margin {
-                vertical: 1,
-                horizontal: 1,
-            }),
+            scrollbar_rect,
             &mut self.scroll_state,
         );
     }
