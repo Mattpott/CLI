@@ -3,8 +3,8 @@
 
 // make all components public to the UI as a barrel file
 pub mod add_component;
+pub mod command_list;
 pub mod database_component;
-pub mod edit_command;
 pub mod editable_text;
 pub mod popup;
 pub mod selected_table;

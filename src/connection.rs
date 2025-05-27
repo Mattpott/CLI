@@ -133,6 +133,17 @@ impl Connection {
         Ok(stmt.execute(params)?)
     }
 
+    /// Simple wrapper over Rusqlite's Statement.execute(params) function
+    /// which should be only used for the sake of modifying a cell.
+    /// An example modification statement is as follows:
+    ///
+    /// `UPDATE table SET col_name = value WHERE pk_name = pk_val;`
+    pub fn modify<T: Params>(&self, query: &str, params: T) -> Result<(), Box<dyn Error>> {
+        let mut stmt = self.connection.prepare(query)?;
+        stmt.execute(params)?;
+        Ok(())
+    }
+
     pub fn get_columns(&self, table: &str) -> Result<Vec<String>, Box<dyn Error>> {
         let stmt = self
             .connection

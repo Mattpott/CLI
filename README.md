@@ -10,3 +10,4 @@ Currently the interface features:
 - Strong customisability for actions on pre-defined tables
 - Addition of rows to pre-defined tables
 - Deletion of rows to pre-defined tables
+- Modification of a cell within a pre-defined table

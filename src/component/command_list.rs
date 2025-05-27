@@ -32,14 +32,14 @@ impl EditCommand {
     }
 }
 
-pub struct EditCommandComp {
+pub struct CommandListComponent {
     commands: Vec<EditCommand>,
     state: TableState,
     selected: Option<usize>,
     prev_selected: Option<usize>,
 }
 
-impl EditCommandComp {
+impl CommandListComponent {
     pub fn new(commands: Vec<EditCommand>) -> Self {
         Self {
             commands,
@@ -113,7 +113,7 @@ impl EditCommandComp {
     }
 }
 
-impl Component for EditCommandComp {
+impl Component for CommandListComponent {
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Vec<Action>, Box<dyn Error>> {
         // ignore key releases
         if key.kind == KeyEventKind::Release {

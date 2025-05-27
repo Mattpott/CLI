@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use edit_command::EditCommand;
+use command_list::EditCommand;
 use ratatui::widgets::{List, ListItem, ListState};
 
 use crate::config::editable_tables;

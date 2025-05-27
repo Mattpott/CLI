@@ -5,7 +5,7 @@ use ratatui::{
 use std::{env, fs::read_dir};
 
 // Just a file containing useful config information
-use crate::component::{edit_command::EditCommand, selected_table::TableMetadata};
+use crate::component::{command_list::EditCommand, selected_table::TableMetadata};
 
 pub const WORKING_DIRECTORY: &str = "Website";
 pub const DATABASE_PATH: &str = "./data/site-content.db";

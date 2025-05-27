@@ -56,6 +56,24 @@ impl TableDisplay {
         })
     }
 
+    pub fn highlit_cell_value(&self) -> Option<String> {
+        self.table_state.selected_cell().map(|(y, x)| {
+            // ensure clamping of values as the state doesn't update to proper
+            // selected row until rendering occurs, which is too late
+            let y = if y == usize::MAX {
+                self.table.rows.len() - 1
+            } else {
+                y
+            };
+            let x = if x == usize::MAX {
+                self.table.columns.len() - 1
+            } else {
+                x
+            };
+            self.table.rows[y][x].to_string()
+        })
+    }
+
     /// Returns the MultiTable's current set of selections
     pub fn selections(&self) -> &[MultiTableSelection] {
         self.state.selections.as_slice()
@@ -102,13 +120,13 @@ impl TableDisplay {
         self.state.select(selection);
     }
 
-    /// Moves the selected cell to the left by amount, if not selecting rows.
+    /// Moves the selected cell to the left by amount.
     /// Wraps selection to the last column if we are at column 0.
     /// Light wrapper of TableState's same-named function.
     fn scroll_left_by(&mut self, amount: u16) {
-        if self.uses_rows {
-            return;
-        }
+        // if self.uses_rows {
+        //     return;
+        // }
         if let Some((_, x)) = self.table_state.selected_cell() {
             if x == 0 {
                 self.table_state.select_last_column();
@@ -118,13 +136,13 @@ impl TableDisplay {
         self.table_state.scroll_left_by(amount);
     }
 
-    /// Moves the selected cell to the right by amount, if not selecting rows.
+    /// Moves the selected cell to the right by amount.
     /// Wraps selection to the first column if we are at the last one.
     /// Light wrapper of TableState's same-named function.
     fn scroll_right_by(&mut self, amount: u16) {
-        if self.uses_rows {
-            return;
-        }
+        // if self.uses_rows {
+        //     return;
+        // }
         if let Some((_, x)) = self.table_state.selected_cell() {
             if x == self.table.columns.len() - 1 {
                 self.table_state.select_first_column();
@@ -197,19 +215,19 @@ impl Component for TableDisplay {
             }
             KeyCode::Left => {
                 self.scroll_left_by(1);
-                Ok(vec![Action::Noop])
+                Ok(vec![Action::HighlightChanged])
             }
             KeyCode::Right => {
                 self.scroll_right_by(1);
-                Ok(vec![Action::Noop])
+                Ok(vec![Action::HighlightChanged])
             }
             KeyCode::Up => {
                 self.scroll_up_by(1);
-                Ok(vec![Action::Noop])
+                Ok(vec![Action::HighlightChanged])
             }
             KeyCode::Down => {
                 self.scroll_down_by(1);
-                Ok(vec![Action::Noop])
+                Ok(vec![Action::HighlightChanged])
             }
             _ => Ok(vec![Action::Noop]),
         }

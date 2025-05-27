@@ -42,6 +42,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cli"
+version = "1.1.0"
+dependencies = [
+ "getopts",
+ "glob",
+ "ratatui",
+ "rusqlite",
+ "strum_macros",
+ "textwrap",
+ "unicode-width 0.2.0",
+]
+
+[[package]]
 name = "compact_str"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,19 +312,6 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "mybuild"
-version = "0.1.0"
-dependencies = [
- "getopts",
- "glob",
- "ratatui",
- "rusqlite",
- "strum_macros",
- "textwrap",
- "unicode-width 0.2.0",
 ]
 
 [[package]]

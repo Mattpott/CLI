@@ -14,6 +14,7 @@ pub enum Action {
     RevertEditHighlight,
     RevertEditSelection,
     RevertToMain,
+    HighlightChanged,
     SelectionChanged,
     VeryLoudWrongBuzzer,
 }
