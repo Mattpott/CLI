@@ -4,7 +4,7 @@ use crate::{
     config::DATABASE_PATH,
     value::{Value, ValueType},
 };
-use rusqlite::{types::Value as RsqValue, Connection as RsqConnection, OpenFlags, Params};
+use rusqlite::{Connection as RsqConnection, OpenFlags, Params, types::Value as RsqValue};
 
 /// A table of Values, generated through a query to some database
 #[derive(Debug, Clone)]
@@ -100,10 +100,7 @@ impl Connection {
                 }
                 Ok(row_fields)
             })?
-            .filter_map(|res| match res {
-                Ok(val) => Some(val),
-                Err(_) => None,
-            })
+            .filter_map(|res| res.ok())
             .collect();
         let query = stmt.expanded_sql();
         Ok(Table {
@@ -171,10 +168,7 @@ impl Connection {
                     cid: row.get("cid")?,
                 })
             })?
-            .filter_map(|res| match res {
-                Ok(val) => Some(val),
-                Err(_) => None,
-            })
+            .filter_map(|res| res.ok())
             .collect();
         Ok(column_info)
     }

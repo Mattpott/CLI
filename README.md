@@ -11,3 +11,4 @@ Currently the interface features:
 - Addition of rows to pre-defined tables
 - Deletion of rows to pre-defined tables
 - Modification of a cell within a pre-defined table
+- Ability to define and use autofill functions associated with a pre-defined table's columns

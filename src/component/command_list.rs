@@ -85,13 +85,6 @@ impl CommandListComponent {
         self.selected = self.prev_selected;
     }
 
-    /// Change highlit option to be the currently selected item
-    pub fn highlight_current_selection(&mut self) {
-        if let Some(selected) = self.selected {
-            self.state.select_column(Some(selected));
-        }
-    }
-
     fn scroll_left_by(&mut self, amount: u16) {
         if let Some(x) = self.state.selected_column() {
             if x == 0 {
@@ -122,10 +115,15 @@ impl Component for CommandListComponent {
         match key.code {
             KeyCode::Esc => Ok(vec![Action::Quit]), // terminate on encountering Esc
             KeyCode::Enter => {
-                // needed in cases where the action shouldn't actually stay selected
-                self.prev_selected = self.selected;
-                self.selected = self.state.selected_column();
-                Ok(vec![Action::ChangeEditCommand])
+                let newly_selected = self.state.selected_column();
+                if self.selected != newly_selected {
+                    // needed in cases where the action shouldn't actually stay selected
+                    self.prev_selected = self.selected;
+                    self.selected = newly_selected;
+                    Ok(vec![Action::ChangeEditCommand])
+                } else {
+                    Ok(vec![Action::Noop])
+                }
             }
             KeyCode::Left => {
                 self.scroll_left_by(1);

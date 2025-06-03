@@ -2,6 +2,7 @@
 // define modules within this crate
 mod action;
 mod app;
+mod autofill;
 mod component;
 mod config;
 mod connection;
@@ -12,11 +13,11 @@ use ratatui::crossterm::execute;
 use std::{error::Error, io};
 // import external crates
 use ratatui::{
+    Terminal,
     crossterm::terminal::{
-        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
     },
     prelude::*,
-    Terminal,
 };
 
 use app::App;

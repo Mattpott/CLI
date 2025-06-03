@@ -40,36 +40,21 @@ impl TableDisplay {
         })
     }
 
-    pub fn clone_from_table(
-        table: &Table,
-        uses_rows: bool,
-        max_selections: usize,
-    ) -> Result<Self, Box<dyn Error>> {
-        let num_items = table.rows.len();
-        Ok(Self {
-            uses_rows,
-            state: MultiTableState::new(max_selections),
-            table: table.clone(),
-            table_state: TuiTableState::new().with_selected_cell(Some((0, 0))),
-            scroll_state: ScrollbarState::new((num_items.saturating_sub(1)) * ROW_HEIGHT),
-        })
-    }
-
     pub fn highlit_cell_value(&self) -> Option<String> {
         self.table_state.selected_cell().map(|(y, x)| {
             // ensure clamping of values as the state doesn't update to proper
             // selected row until rendering occurs, which is too late
-            let y = if y == usize::MAX {
-                self.table.rows.len() - 1
-            } else {
-                y
-            };
-            let x = if x == usize::MAX {
-                self.table.columns.len() - 1
-            } else {
-                x
-            };
+            let y = y.clamp(0, self.table.rows.len() - 1);
+            let x = x.clamp(0, self.table.columns.len() - 1);
             self.table.rows[y][x].to_string()
+        })
+    }
+
+    pub fn highlit_col_name(&self) -> Option<String> {
+        self.table_state.selected_column().map(|x| {
+            // clamp value
+            let x = x.clamp(0, self.table.columns.len() - 1);
+            self.table.columns[x].clone()
         })
     }
 
@@ -329,7 +314,7 @@ impl Component for TableDisplay {
         f.render_stateful_widget(table, rect, &mut self.table_state);
 
         // render the scrollbar for the table
-        let mut scrollbar_rect = rect.clone();
+        let mut scrollbar_rect = rect;
         scrollbar_rect.y += 1;
         scrollbar_rect.height = scrollbar_rect.height.saturating_sub(1);
         f.render_stateful_widget(

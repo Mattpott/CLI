@@ -126,7 +126,7 @@ impl AddComponent {
         }
         Ok(vec![
             Action::RevertToMain,
-            Action::RevertEditSelection,
+            Action::RevertCommandSelection,
             Action::Refresh,
         ])
     }

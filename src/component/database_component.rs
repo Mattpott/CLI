@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::{
+    autofill::AutoFillFn,
     component::{
         add_component::AddComponent,
         command_list::{CommandListComponent, EditCommand},
@@ -21,17 +24,18 @@ use rusqlite::{params_from_iter, types::Value as RsqValue};
 #[derive(PartialEq)]
 enum FocusArea {
     Commands,
-    Editor,
-    Table,
+    Main,
 }
 
 pub struct DatabaseComp {
     add_component: Option<AddComponent>,
+    autofill_funcs: HashMap<&'static str, AutoFillFn>,
     cell_display: Option<EditableText>,
     column_info: Vec<ColumnInfo>,
     command_list: CommandListComponent,
     connection: Connection,
     focus: FocusArea,
+    focusing_editor: bool,
     max_selections: usize,
     query: Option<String>,
     table: Option<TableDisplay>,
@@ -51,11 +55,13 @@ impl DatabaseComp {
         let connection = Connection::new()?;
         Ok(Self {
             add_component: None,
+            autofill_funcs: HashMap::with_capacity(0),
             cell_display: None,
             column_info: Vec::new(),
             command_list: CommandListComponent::new(Vec::new()),
             connection,
-            focus: FocusArea::Table,
+            focus: FocusArea::Main,
+            focusing_editor: false,
             max_selections,
             query: None,
             table: None,
@@ -68,6 +74,8 @@ impl DatabaseComp {
     /// and its associated edit commands.
     pub fn change_table_used(&mut self, table: &TableMetadata) -> Result<(), Box<dyn Error>> {
         self.command_list.change_commands(table.commands.clone());
+        self.autofill_funcs = table.autofill_funcs.clone();
+        self.unfocus_editor();
         if let Some(table) = &mut self.table {
             table.reset_selections();
             // TODO: MAY WANT TO CHANGE THIS SO THAT STATE FROM THE ADD SCREEN IS STORED
@@ -268,7 +276,7 @@ impl DatabaseComp {
         if let Some((y, x, val)) = to_update {
             table.table.rows[y][x] = val;
         }
-        return Ok(true);
+        Ok(true)
     }
 
     /// Shifts focus to the next focusable component.
@@ -278,10 +286,10 @@ impl DatabaseComp {
     pub fn next_focus(&mut self) -> bool {
         match self.focus {
             FocusArea::Commands => {
-                self.focus = FocusArea::Table;
+                self.focus = FocusArea::Main;
                 false
             }
-            FocusArea::Table | FocusArea::Editor => true,
+            FocusArea::Main => true,
         }
     }
 
@@ -291,7 +299,7 @@ impl DatabaseComp {
     /// false if this was able to change focus
     pub fn prev_focus(&mut self) -> bool {
         match self.focus {
-            FocusArea::Table | FocusArea::Editor => {
+            FocusArea::Main => {
                 self.focus = FocusArea::Commands;
                 false
             }
@@ -304,7 +312,7 @@ impl DatabaseComp {
     }
 
     pub fn focus_last(&mut self) {
-        self.focus = FocusArea::Table;
+        self.focus = FocusArea::Main;
     }
 
     /// Updates the number of selections to hold the new max number.
@@ -344,6 +352,9 @@ impl DatabaseComp {
         Ok(())
     }
 
+    /// Hides/Shows the add component depending on the newly selected command,
+    /// focuses the main section (table), and ensures the editor is not selected.
+    /// Should only be called if the edit command changed to something different
     fn handle_edit_command_change(&mut self) {
         if let Some(command) = self.command_list.selected() {
             match command {
@@ -360,7 +371,12 @@ impl DatabaseComp {
                 }
             }
             // change the focused element to be the table now
-            self.focus = FocusArea::Table;
+            self.focus = FocusArea::Main;
+            self.unfocus_editor();
+            // remove all selections
+            if let Some(table) = &mut self.table {
+                table.reset_selections();
+            }
         }
     }
 
@@ -377,7 +393,7 @@ impl DatabaseComp {
                 Ok(())
             }
             EditCommand::Modify => {
-                self.focus = FocusArea::Editor;
+                self.focusing_editor = true;
                 if let Some(editor) = &mut self.cell_display {
                     editor.toggle_focus();
                 }
@@ -391,9 +407,18 @@ impl DatabaseComp {
     fn update_cell_display(&mut self) {
         if let Some(table) = &self.table {
             if let Some(highlit_cell) = table.highlit_cell_value() {
-                self.cell_display = Some(EditableText::new(&highlit_cell));
+                let col_name = table
+                    .highlit_col_name()
+                    .expect("Cell is highlit but no column name was available");
+                let autofill = self.autofill_funcs.get(col_name.as_str()).cloned();
+                self.cell_display = Some(EditableText::new(&highlit_cell, autofill));
             }
         }
+    }
+
+    fn unfocus_editor(&mut self) {
+        self.update_cell_display();
+        self.focusing_editor = false;
     }
 
     fn handle_actions(&mut self, actions: Vec<Action>) -> Vec<Action> {
@@ -406,11 +431,7 @@ impl DatabaseComp {
                 self.handle_edit_command_change();
                 false
             }
-            Action::RevertEditHighlight => {
-                self.command_list.highlight_current_selection();
-                false
-            }
-            Action::RevertEditSelection => {
+            Action::RevertCommandSelection => {
                 self.command_list.revert_selection();
                 false
             }
@@ -433,7 +454,7 @@ impl Component for DatabaseComp {
                 let actions = self.command_list.handle_event(event)?;
                 Ok(self.handle_actions(actions))
             }
-            FocusArea::Table | FocusArea::Editor => {
+            FocusArea::Main => {
                 // handle the add component if there is one showing
                 if let Some(add_comp) = &mut self.add_component {
                     let actions = add_comp.handle_event(event)?;
@@ -443,15 +464,12 @@ impl Component for DatabaseComp {
                     Action::Noop => Ok(vec![Action::Noop]),
                     Action::Quit => Ok(vec![Action::Quit]),
                     Action::KeyEvent(key_event) => {
-                        if self.focus == FocusArea::Table {
+                        if !self.focusing_editor {
                             self.handle_key_event(key_event)
                         } else {
                             match key_event.code {
                                 KeyCode::Esc => {
-                                    if let Some(editor) = &mut self.cell_display {
-                                        editor.toggle_focus();
-                                    }
-                                    self.focus = FocusArea::Table;
+                                    self.unfocus_editor();
                                     if let Some(table) = &mut self.table {
                                         table.reset_selections();
                                     }
@@ -459,10 +477,7 @@ impl Component for DatabaseComp {
                                 }
                                 KeyCode::Enter => {
                                     if self.submit_modify()? {
-                                        if let Some(editor) = &mut self.cell_display {
-                                            editor.toggle_focus();
-                                        }
-                                        self.focus = FocusArea::Table;
+                                        self.unfocus_editor();
                                         if let Some(table) = &mut self.table {
                                             table.reset_selections();
                                         }
@@ -535,64 +550,63 @@ impl Component for DatabaseComp {
             panic!("Not enough size to create the necessary rects");
         };
 
-        if let Some(table) = &mut self.table {
-            // uses the passed block for the potentially focused component as
-            // the block will be unfocused if this component is not focused
-            let (commands_block, main_block) = match self.focus {
-                FocusArea::Commands => (block, DEFAULT_APP_COLORS.default_block()),
-                FocusArea::Table | FocusArea::Editor => (DEFAULT_APP_COLORS.default_block(), block),
-            };
-            self.command_list.render(f, commands_rect, commands_block);
-            if let Some(add_comp) = &mut self.add_component {
-                // render the add component if it is shown
-                add_comp.render(f, main_rect, main_block);
-            } else {
-                if let Some(cell_display) = &mut self.cell_display {
-                    // split the main_rect to show the cell display
-                    let [table_rect, mut cell_display_rect, ..] = *Layout::default()
-                        .margin(1) // 1 margin to account for border
-                        .direction(Direction::Horizontal)
-                        .constraints([
-                            Constraint::Percentage(75), // table takes up 75% of main area
-                            Constraint::Min(8), // cell display requires at least 8 cols width
-                        ])
-                        .split(main_rect)
-                    else {
-                        panic!("Not enough size to create the necessary rects");
-                    };
-
-                    // render the main border block separately
-                    f.render_widget(main_block.bg(DEFAULT_APP_COLORS.main_bg), main_rect);
-                    // allot space for the title of the cell display
-                    let mut cell_display_title_rect = cell_display_rect.clone();
-                    cell_display_title_rect.height = 1;
-                    cell_display_rect.height = cell_display_rect.height.saturating_sub(1);
-                    cell_display_rect.y += 1;
-                    cell_display_rect.width = cell_display_rect.width.saturating_sub(1);
-                    cell_display_rect.x += 1;
-                    let display_title = if self.focus == FocusArea::Editor {
-                        "Editor"
-                    } else {
-                        "Reader"
-                    };
-                    f.render_widget(
-                        Paragraph::new(display_title)
-                            .bg(DEFAULT_APP_COLORS.header_bg)
-                            .fg(DEFAULT_APP_COLORS.header_fg)
-                            .centered(),
-                        cell_display_title_rect,
-                    );
-                    cell_display.render(f, cell_display_rect, Block::new());
-                    table.render(f, table_rect, Block::new());
-                } else {
-                    table.render(f, main_rect, main_block);
-                }
-            }
-        } else {
+        if self.table.is_none() {
             f.render_widget(
                 Paragraph::new("No table queried").centered().block(block),
                 rect,
             );
+            return;
+        }
+
+        let table = self.table.as_mut().unwrap();
+        // uses the passed block for the potentially focused component as
+        // the block will be unfocused if this component is not focused
+        let (commands_block, main_block) = match self.focus {
+            FocusArea::Commands => (block, DEFAULT_APP_COLORS.default_block()),
+            FocusArea::Main => (DEFAULT_APP_COLORS.default_block(), block),
+        };
+        self.command_list.render(f, commands_rect, commands_block);
+        if let Some(add_comp) = &mut self.add_component {
+            // render the add component if it is shown
+            add_comp.render(f, main_rect, main_block);
+        } else if let Some(cell_display) = &mut self.cell_display {
+            // split the main_rect to show the cell display
+            let [table_rect, mut cell_display_rect, ..] = *Layout::default()
+                .margin(1) // 1 margin to account for border
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(75), // table takes up 75% of main area
+                    Constraint::Min(8),         // cell display requires at least 8 cols width
+                ])
+                .split(main_rect)
+            else {
+                panic!("Not enough size to create the necessary rects");
+            };
+            // render the main border block separately
+            f.render_widget(main_block.bg(DEFAULT_APP_COLORS.main_bg), main_rect);
+            // allot space for the title of the cell display
+            let mut cell_display_title_rect = cell_display_rect;
+            cell_display_title_rect.height = 1;
+            cell_display_rect.height = cell_display_rect.height.saturating_sub(1);
+            cell_display_rect.y += 1;
+            cell_display_rect.width = cell_display_rect.width.saturating_sub(1);
+            cell_display_rect.x += 1;
+            let display_title = if self.focusing_editor {
+                "Editor"
+            } else {
+                "Reader"
+            };
+            f.render_widget(
+                Paragraph::new(display_title)
+                    .bg(DEFAULT_APP_COLORS.header_bg)
+                    .fg(DEFAULT_APP_COLORS.header_fg)
+                    .centered(),
+                cell_display_title_rect,
+            );
+            cell_display.render(f, cell_display_rect, Block::new());
+            table.render(f, table_rect, Block::new());
+        } else {
+            table.render(f, main_rect, main_block);
         }
     }
 }

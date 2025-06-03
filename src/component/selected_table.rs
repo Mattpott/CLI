@@ -3,18 +3,16 @@ use std::{borrow::Cow, collections::HashMap};
 use command_list::EditCommand;
 use ratatui::widgets::{List, ListItem, ListState};
 
-use crate::config::editable_tables;
+use crate::{autofill::AutoFillFn, config::editable_tables};
 
 use super::*;
-
-pub type AutoFillFn = fn(&str) -> String;
 
 #[derive(Debug, Clone)]
 pub struct TableMetadata {
     pub(crate) commands: Vec<EditCommand>,
     pub(crate) display_name: &'static str,
     pub(crate) table_name: &'static str,
-    pub(crate) autofill_funcs: Option<HashMap<String, Option<AutoFillFn>>>,
+    pub(crate) autofill_funcs: HashMap<&'static str, AutoFillFn>,
 }
 
 impl std::fmt::Display for TableMetadata {
@@ -38,24 +36,12 @@ impl TableSelection {
         }
     }
 
-    pub fn current_commands(&self) -> Option<&[EditCommand]> {
-        if let Some(ind) = self.state.selected() {
-            Some(self.allowed_tables[ind].commands.as_slice())
-        } else {
-            None
-        }
-    }
-
     pub fn selected(&self) -> Option<&TableMetadata> {
         if !self.allowed_tables.is_empty() {
             Some(&self.allowed_tables[self.selected_ind])
         } else {
             None
         }
-    }
-
-    pub fn highlit(&self) -> Option<&TableMetadata> {
-        self.state.selected().map(|ind| &self.allowed_tables[ind])
     }
 
     fn scroll_up_by(&mut self, amount: u16) {

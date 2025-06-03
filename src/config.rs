@@ -1,14 +1,18 @@
 use ratatui::{
-    style::{palette::tailwind, Color},
+    style::{Color, palette::tailwind},
     widgets::{Block, BorderType},
 };
-use std::{env, fs::read_dir};
+use std::{collections::HashMap, env, fs::read_dir};
 
 // Just a file containing useful config information
-use crate::component::{command_list::EditCommand, selected_table::TableMetadata};
+use crate::{
+    autofill::{AutoFillFn, html_filepath},
+    component::{command_list::EditCommand, selected_table::TableMetadata},
+};
 
 pub const WORKING_DIRECTORY: &str = "Website";
 pub const DATABASE_PATH: &str = "./data/site-content.db";
+pub const PHP_PATH: &str = "php";
 
 /// Changes the working directory to be the ancestor directory with the
 /// base name specified by the [`WORKING_DIRECTORY`] constant defined within
@@ -105,13 +109,13 @@ pub fn editable_tables() -> Vec<TableMetadata> {
             ],
             display_name: "Category",
             table_name: "category",
-            autofill_funcs: None,
+            autofill_funcs: HashMap::from([("cat_index_path", html_filepath as AutoFillFn)]),
         },
         TableMetadata {
             commands: vec![EditCommand::Modify, EditCommand::Delete, EditCommand::Add],
             display_name: "Document",
             table_name: "document",
-            autofill_funcs: None,
+            autofill_funcs: HashMap::from([("doc_path", html_filepath as AutoFillFn)]),
         },
         TableMetadata {
             commands: vec![
@@ -123,13 +127,7 @@ pub fn editable_tables() -> Vec<TableMetadata> {
             ],
             display_name: "CategoryDocument",
             table_name: "categorydocument",
-            autofill_funcs: None,
-        },
-        TableMetadata {
-            commands: vec![EditCommand::Modify],
-            display_name: "Pragma Info",
-            table_name: "pragma_table_info('category')",
-            autofill_funcs: None,
+            autofill_funcs: HashMap::with_capacity(0),
         },
     ]
 }
